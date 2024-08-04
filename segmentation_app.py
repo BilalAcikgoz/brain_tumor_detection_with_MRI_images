@@ -1,31 +1,64 @@
 import streamlit as st
 import cv2
-import random
 import numpy as np
 from ultralytics import YOLO
 import torch
-import torchvision
+import torch.nn as nn
+from torchvision import models, transforms
+from PIL import Image
 
-def Detect_Objects_Button(model_path):
+class ResNetWithDropout(nn.Module):
+    def __init__(self, original_model, dropout_rate=0.5):
+        super(ResNetWithDropout, self).__init__()
+        self.features = nn.Sequential(*list(original_model.children())[:-1])
+        num_ftrs = original_model.fc.in_features
+        self.classifier = nn.Sequential(
+            nn.Dropout(dropout_rate),
+            nn.Linear(num_ftrs, 4)
+        )
+    def forward(self, x):
+        x = self.features(x)
+        x = torch.flatten(x, 1)
+        x = self.classifier(x)
+        return x
+
+brain_classification_model_path = '/home/bilal-ai/Desktop/anomali_detection_with_medical_images/brain_anomali_detection/resnet_model.pth'
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+original_resnet_model = models.resnet18(pretrained=True)
+classification_model_for_brain = ResNetWithDropout(original_resnet_model, dropout_rate=0.5)
+classification_model_for_brain = torch.load(brain_classification_model_path, map_location=device)
+classification_model_for_brain.to(device)
+classification_model_for_brain.eval()
+
+preprocess = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+])
+def classify_image(image):
+    image = preprocess(image).unsqueeze(0).to(device)
+    with torch.no_grad():
+        outputs = classification_model_for_brain(image)
+    _, predicted = torch.max(outputs, 1)
+    class_names = ['Glioma', 'Meningioma', 'Pituitary', 'no_tumor']
+    return class_names[predicted.item()]
+def Detect_Objects_Button(detection_model_path):
     if st.sidebar.button('Detect Tumor'):
         result_image_rgb = None
         if source_img:
             # Running the YOLO model on the uploaded image
-            results = model_path(uploaded_image, conf=confidence)
-            # colors = [random.choices(range(256), k=3) for _ in classes_ids]
-            print(results)
-            if results is None:
+            results_detection = detection_model_path(uploaded_image, conf=confidence)
+            print(results_detection)
+            if results_detection is None:
                 st.write("No tumor detected in the image.")
                 return None
             else:
-                for result in results:
+                for result in results_detection:
                     if result is not None and result.masks is not None:
                         for mask, box in zip(result.masks.xy, result.boxes):
-                            with st.expander("Detection Results"):
-                                st.write(box.xywh)
                             points = np.int32([mask])
                             # cv2.polylines(img, points, True, (255, 0, 0), 1)
-                            #color_number = classes_ids.index(int(box.cls[0]))
+                            # color_number = classes_ids.index(int(box.cls[0]))
                             result_image_rgb = cv2.fillPoly(uploaded_image, points, color=(255, 0, 0))
                     else:
                         st.write("No tumor detected in the image.")
@@ -34,24 +67,24 @@ def Detect_Objects_Button(model_path):
                 if result_image_rgb is not None:
                     st.image(result_image_rgb, caption="Detected Tumor", width=300)
 
+            # Classification
+            pil_image = Image.fromarray(cv2.cvtColor(uploaded_image, cv2.COLOR_BGR2RGB))
+            classification_result = classify_image(pil_image)
+            st.write(f'Classification Result: {classification_result}')
+
         else:
             st.write("No image uploaded. Please upload an image.")
 
 # Setting page layout
 st.set_page_config(
-    page_title="Tumor Segmentation Application",  # Setting page title
+    page_title="Anomali Detection Application",  # Setting page title
     page_icon="🤖",  # Setting page icon
     layout="wide",  # Setting layout to wide
     initial_sidebar_state="expanded"  # Expanding sidebar by default
 )
 
-brain_yolo_model_path = '/home/bilal-ai/Desktop/tumor_detection_with_medical_images/runs/segment/yolov8m-seg/weights/best.pt'
-model_for_brain = YOLO(brain_yolo_model_path)
-
-# Filling difference colors for difference brain tumor types but we have a our brain tumor class
-# yolo_classes = list(model.names.values())
-# classes_ids = [yolo_classes.index(clas) for clas in yolo_classes]
-# print(classes_ids)
+brain_yolo_model_path = '/home/bilal-ai/Desktop/anomali_detection_with_medical_images/brain_anomali_detection/runs/segment/yolov8m-seg/weights/best.pt'
+detection_model_for_brain = YOLO(brain_yolo_model_path)
 
 # Creating sidebar
 with (st.sidebar):
@@ -66,7 +99,7 @@ with (st.sidebar):
     confidence = float(st.slider("Select Model Confidence", 25, 100, 40)) / 100
 
 # Creating main page heading
-st.title("TUMOR SEGMENTATION APP")
+st.title("ANOMALI DETECTION APP")
 
 # Creating two columns on the main page
 col1, col2 = st.columns(2)
@@ -95,5 +128,5 @@ st.markdown("""
 
 
 if selection == 'Brain MRI':
-    Detect_Objects_Button(model_for_brain)
+    Detect_Objects_Button(detection_model_for_brain)
 
