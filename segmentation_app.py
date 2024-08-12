@@ -22,7 +22,7 @@ class ResNetWithDropout(nn.Module):
         x = self.classifier(x)
         return x
 
-brain_classification_model_path = '/home/bilal-ai/Desktop/anomali_detection_with_medical_images/brain_anomali_detection/resnet_model.pth'
+brain_classification_model_path = '/home/bilal-ai/Desktop/brain_tumor_detection_with_MRI_images/resnet_model.pth'
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 original_resnet_model = models.resnet18(pretrained=True)
 classification_model_for_brain = ResNetWithDropout(original_resnet_model, dropout_rate=0.5)
@@ -77,20 +77,18 @@ def Detect_Objects_Button(detection_model_path):
 
 # Setting page layout
 st.set_page_config(
-    page_title="Anomali Detection Application",  # Setting page title
+    page_title="Brain Tumor Segmentation and Classification Application",  # Setting page title
     page_icon="🤖",  # Setting page icon
     layout="wide",  # Setting layout to wide
     initial_sidebar_state="expanded"  # Expanding sidebar by default
 )
 
-brain_yolo_model_path = '/home/bilal-ai/Desktop/anomali_detection_with_medical_images/brain_anomali_detection/runs/segment/yolov8m-seg/weights/best.pt'
+brain_yolo_model_path = '/home/bilal-ai/Desktop/brain_tumor_detection_with_MRI_images/runs/segment/yolov8m-seg/weights/best.pt'
 detection_model_for_brain = YOLO(brain_yolo_model_path)
 
 # Creating sidebar
 with (st.sidebar):
     st.header("Image Config")  # Adding header to sidebar
-    selections = ['Brain MRI']
-    selection = st.selectbox('Please click a selection: ', selections)
     # Adding file uploader to sidebar for selecting images
     source_img = st.sidebar.file_uploader(
         "Choose an image...", type=("jpg", "jpeg", "png", 'bmp', 'webp'))
@@ -99,7 +97,7 @@ with (st.sidebar):
     confidence = float(st.slider("Select Model Confidence", 25, 100, 40)) / 100
 
 # Creating main page heading
-st.title("ANOMALI DETECTION APP")
+st.title("Brain Tumor Segmentation and Classification Application")
 
 # Creating two columns on the main page
 col1, col2 = st.columns(2)
@@ -126,7 +124,5 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-
-if selection == 'Brain MRI':
-    Detect_Objects_Button(detection_model_for_brain)
+Detect_Objects_Button(detection_model_for_brain)
 
